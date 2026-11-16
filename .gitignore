@@ -1,7 +1,12 @@
 node_modules/
-.env
 dist/
 build/
+.env
+backend/.env
+*.log
+backend/data/*.json
 .DS_Store
-.continue/
-Test
+.vscode/
+.idea/
+.continue/*
+!.continue/rules/
