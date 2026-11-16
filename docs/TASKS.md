@@ -2,114 +2,74 @@
 
 Status: TODO / DOING / DONE. One task = one fresh AI session = one Git branch.
 Rules: see `.continue/rules/project.md` and `docs/PLAN.md`.
-Currently written: M0 and M1. Later milestones are added after these are DONE.
-
 ---
 
-# M0 — Foundation
+# M0 — Foundation (condensed: 4 tasks, one commit each)
+
+Existing scaffold in `backend/`, `frontend/`, `database/schema.sql` is kept. Every task starts by AUDITING what exists, then adds only what is missing. Do not rewrite working files.
 
 ## T0.1 Repo hygiene and shared tooling
 Status: TODO
 Branch: `chore/repo-tooling`
 Files: `.gitignore`, `.env.example`, `.prettierrc`, `.editorconfig`, `README.md`
+Decisions already made:
+- Create the canonical root `.env.example`; leave `backend/.env.example` untouched for now.
+- Replace the `.continue/` entry in `.gitignore` with `.continue/*` and `!.continue/rules/` (track project rules only).
+- Remove the stray `Test` line from `.gitignore`. Keep `build/`.
 Do:
-- Check which of these files already exist. Only add what is missing or wrong.
-- `.gitignore` must ignore: `node_modules`, `dist`, `.env`, `*.log`, `backend/data/*.json` (generated graph), IDE folders.
-- `.env.example` lists every variable with a placeholder value (no real secrets). For now: `PORT`, `NODE_ENV`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`.
-- Shared `.prettierrc` (single quotes, semicolons, 100 columns) and `.editorconfig` (LF, 2 spaces).
-- `README.md`: project name, one-paragraph description, "setup coming soon" placeholder.
+- `.gitignore` must ignore: `node_modules`, `dist`, `.env`, `backend/.env`, `*.log`, `backend/data/*.json`, `.vscode/`, `.idea/`.
+- Root `.env.example`: `PORT`, `NODE_ENV`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN` with placeholder values only.
+- `.prettierrc` (single quotes, semicolons, 100 columns) and `.editorconfig` (LF, 2 spaces, UTF-8, final newline).
+- `README.md`: name, one-paragraph description from the PLAN overview, "Setup coming soon".
 Acceptance:
-- [ ] `git status` shows no `node_modules` or `.env` as tracked/untracked-to-add.
-- [ ] `.env.example` exists and contains no real secrets.
+- [ ] `git check-ignore -v backend/.env` shows it is ignored.
+- [ ] `git check-ignore -v .continue/rules/project.md` prints nothing (not ignored).
+- [ ] `git status` shows no `node_modules` or `.env`.
 
-## T0.2 Backend skeleton
+## T0.2 Backend skeleton and core infrastructure
 Status: TODO
 Branch: `feat/backend-skeleton`
-Files: `backend/package.json`, `backend/tsconfig.json`, `backend/eslint.config.js`, `backend/vitest.config.ts`, `backend/src/app.ts`, `backend/src/server.ts`
+Files: `backend/package.json`, `backend/tsconfig.json`, `backend/eslint.config.js`, `backend/vitest.config.ts`, `backend/src/app.ts`, `backend/src/server.ts`, `backend/src/config/env.ts`, `backend/src/errors/AppError.ts`, `backend/src/middlewares/{errorHandler,notFound,requestLogger}.ts`
 Do:
-- Initialize `backend/` (if not done). TypeScript `strict`, ESM or CommonJS (pick one, keep it consistent).
-- Dependencies: `express`, `pg`, `zod`, `dotenv`, `helmet`, `cors`, `express-rate-limit`, `bcrypt`, `jsonwebtoken`. Dev: `typescript`, `tsx`, `vitest`, `eslint` + TypeScript ESLint, `prettier`, and the `@types/*` packages.
-- Scripts: `dev` (tsx watch), `build`, `start`, `lint`, `test`, `typecheck` (`tsc --noEmit`).
-- `app.ts` creates the Express app (JSON body parser, helmet, cors) and exports it; `server.ts` starts listening. Keep them separate so tests can import `app`.
-- `GET /api/v1/health` returns `{ "data": { "status": "ok" } }` (no database yet).
-- One Vitest test for the health route is optional here (supertest is added in T1.5).
+1. Audit the existing `backend/` against this checklist and list gaps before changing anything: TypeScript `strict`; scripts `dev` (tsx watch), `build`, `start`, `lint`, `typecheck` (`tsc --noEmit`), `test`; dependencies `express pg zod dotenv helmet cors express-rate-limit bcrypt jsonwebtoken`; dev dependencies `typescript tsx vitest eslint prettier` plus `@types/*`.
+2. Fill only the gaps. Keep `app.ts` (exports the Express app) separate from `server.ts` (starts listening).
+3. `env.ts`: validate all variables with Zod, exit with a readable message if invalid, export a typed `env`.
+4. `AppError(code, httpStatus, message, details?)`, `notFound` (404 in the error envelope), `errorHandler` (error envelope `{ error: { code, message, details? } }`, no stack traces in production), `requestLogger` (timestamp, method, path, status, duration; never log bodies or tokens).
+5. `GET /api/v1/health` returns `{ "data": { "status": "ok" } }` (database check is added in T0.3).
+6. One unit test for `errorHandler`.
 Acceptance:
-- [ ] `npm run dev` starts the server; `GET http://localhost:<PORT>/api/v1/health` returns 200.
-- [ ] `npm run lint`, `npm run typecheck`, `npm test` all pass.
+- [ ] `npm run dev` starts; `GET /api/v1/health` returns 200; an unknown URL returns 404 in the error envelope.
+- [ ] Starting without a required env variable fails with a readable message.
+- [ ] `npm run lint`, `npm run typecheck`, `npm test` pass.
 
-## T0.3 Env validation, error handling, request logging
+## T0.3 Database, DB pool, seed, health check
 Status: TODO
-Branch: `feat/backend-core-infra`
-Files: `backend/src/config/env.ts`, `backend/src/errors/AppError.ts`, `backend/src/middlewares/errorHandler.ts`, `backend/src/middlewares/requestLogger.ts`, `backend/src/middlewares/notFound.ts`
+Branch: `feat/database`
+Files: `docker-compose.yml`, `backend/src/config/db.ts`, `backend/scripts/seed.ts`, `backend/package.json` (script `seed`), update `/health`
 Do:
-- `env.ts` reads and validates all variables with Zod; exits with a clear message if something is missing. Export a typed `env` object.
-- `AppError(code, httpStatus, message, details?)`.
-- `notFound` returns a 404 in the error envelope; `errorHandler` converts `AppError` and unexpected errors into `{ error: { code, message, details? } }` (hide stack traces when `NODE_ENV=production`).
-- `requestLogger` logs timestamp, method, path, status, duration. Never log bodies, tokens, or passwords.
-Acceptance:
-- [ ] Starting without `DATABASE_URL` fails with a readable message.
-- [ ] `GET /api/v1/does-not-exist` returns 404 in the error envelope.
-- [ ] Unit tests for `AppError` handling in `errorHandler` pass.
-
-## T0.4 PostgreSQL with Docker Compose and DB pool
-Status: TODO
-Branch: `feat/database-connection`
-Files: `docker-compose.yml`, `backend/src/config/db.ts`, update `/health`
-Do:
-- `docker-compose.yml` with service `db` (`postgres:16`), a named volume, credentials from environment variables, port mapping, and a healthcheck. Mount `./database/schema.sql` into `/docker-entrypoint-initdb.d/` (the file can be a placeholder until T0.5).
-- `db.ts` exports a `pg` Pool built from `env.DATABASE_URL` and a small `query` helper.
-- `/api/v1/health` also runs `SELECT 1` and returns `{ data: { status: "ok", db: "up" } }`, or 503 with `db: "down"` if it fails.
-Acceptance:
-- [ ] `docker compose up -d` starts PostgreSQL; I can connect with a DB client.
-- [ ] `/health` shows `db: "up"`; after `docker compose stop db` it returns 503.
-
-## T0.5 Database schema
-Status: TODO
-Branch: `feat/database-schema`
-Files: `database/schema.sql`
-Do:
-- Write the full schema exactly as in `docs/PLAN.md` section 5: 8 main tables + 3 junction tables, with primary keys, foreign keys (choose `ON DELETE` deliberately and add a short SQL comment explaining each), NOT NULL, UNIQUE, CHECK constraints, audit columns, and an index on every foreign key.
-- Include: partial unique index for one `LEADER` per meetup; unique `invite_code`; `rating` check 1-5; `price_level` check 1-4.
-- Do not add tables or columns that are not in the plan. If something seems missing, ask.
+- `docker-compose.yml`: service `db` (`postgres:16`), named volume, credentials from environment variables, healthcheck, and `./database/schema.sql` mounted into `/docker-entrypoint-initdb.d/`.
+- Do NOT rewrite `database/schema.sql`; it was already reviewed against `docs/PLAN.md` section 5. If it fails to load, report the exact error and make the smallest fix.
+- `db.ts`: export a `pg` Pool from `env.DATABASE_URL` and a small `query` helper. Register type parsers so `BIGINT` (type id 20) returns a `number` and `NUMERIC` (type id 1700) returns a `number` (`parseFloat`). Add a short comment explaining why (`pg` returns them as strings by default).
+- Seed script, idempotent (`ON CONFLICT DO NOTHING`): 3 roles (`ADMIN`, `MODERATOR`, `USER`), about 10 categories, users `admin@test.com / Admin123!`, `moderator@test.com / Moderator123!`, `user1@test.com / User123!` through `user10@test.com` (same pattern), passwords hashed with bcrypt. No venues here (M2).
+- `/api/v1/health` runs `SELECT 1`: `{ data: { status: "ok", db: "up" } }`, or 503 with `db: "down"`.
 Acceptance:
 - [ ] `docker compose down -v && docker compose up -d` creates all 11 tables with no errors.
-- [ ] Manual checks fail as expected: duplicate email, rating 6, second `LEADER` in a meetup, `status` outside the allowed values.
+- [ ] `npm run seed` run twice: no errors, no duplicates, 12 users, hashes start with `$2`.
+- [ ] `/health` shows `db: "up"`; after `docker compose stop db` it returns 503.
+- [ ] By hand in `psql`: duplicate email, rating 6, and a second `LEADER` in one meetup are all rejected.
 
-## T0.6 Seed script (roles, categories, test users)
-Status: TODO
-Branch: `feat/seed-basic`
-Files: `database/seed/seed.ts` (or `backend/scripts/seed.ts`), `backend/package.json` script `seed`
-Do:
-- Insert roles (`ADMIN`, `MODERATOR`, `USER`), about 10 categories, and test users: `admin@test.com / Admin123!`, `moderator@test.com / Moderator123!`, `user1@test.com / User123!` through `user10@test.com` (same pattern). Hash passwords with bcrypt inside the script.
-- The script is idempotent (safe to run twice; use `ON CONFLICT DO NOTHING`).
-- Venues are NOT seeded here (that is M2).
-Acceptance:
-- [ ] `npm run seed` twice in a row causes no errors and no duplicate rows.
-- [ ] The `users` table has 12 rows and `password_hash` values start with `$2`.
-
-## T0.7 ER diagram
-Status: TODO
-Branch: `docs/er-diagram`
-Files: `database/ER-diagram.png`
-Do:
-- Draw the ER diagram of the schema (dbdiagram.io or draw.io, crow's foot notation) and export it as PNG. This is a manual task; the AI can only help write the dbdiagram.io code from `schema.sql`.
-Acceptance:
-- [ ] All 11 tables, their relationships, and cardinalities are visible and readable.
-
-## T0.8 Deploy the skeleton
+## T0.4 Deploy the skeleton
 Status: TODO
 Branch: `chore/deploy-skeleton`
 Files: `backend/Dockerfile`, `.dockerignore`, `docs/DEPLOYMENT.md`
 Do:
-- Write a production `Dockerfile` for the backend (multi-stage build, runs `node dist/server.js`).
-- On Render (or Railway): create a managed PostgreSQL and a web service from the repo. Set environment variables in the dashboard (never in code). Run `schema.sql` and the seed once against the hosted database.
-- Record each step, plus the final public URL, in `docs/DEPLOYMENT.md` (this feeds the report).
+- AI part: multi-stage production `Dockerfile` for the backend (build with `tsc`, run `node dist/server.js`), `.dockerignore`, and a `docs/DEPLOYMENT.md` skeleton with the steps below.
+- Manual part (done by me, the AI only documents it): create a managed PostgreSQL and a web service on Render (or Railway) from the repo; set environment variables in the dashboard; run `schema.sql` and the seed once against the hosted database; record the public URL.
 Acceptance:
 - [ ] `https://<public-url>/api/v1/health` returns `db: "up"`.
 - [ ] No secrets appear in the repository.
 
-**M0 checkpoint:** local `docker compose up` works, all tables exist, test users are seeded, and `/health` is OK on the public URL.
-
+**M0 checkpoint:** local `docker compose up` works, 11 tables exist, test users are seeded, `/health` is OK on the public URL. (ER diagram moved to M8.)
 ---
 
 # M1 — Authentication
