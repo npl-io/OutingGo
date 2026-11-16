@@ -80,3 +80,6 @@ Do not call external routing APIs (Google, Mapbox, OSRM). Routing is our own eng
 Do not call the Overpass API at runtime. OSM data is processed offline by scripts.
 Do not claim something works unless you ran the checks above.
 Do not try to read or write `.env` files (the IDE blocks them). If a task needs one, tell me what to put in it and I will create it by hand.
+ The terminal is Windows PowerShell: never chain commands with `&&`; use `;` or run them separately.
+ Do not search the web; ask me if you need information you cannot get from the repo or npm.
+Do not start long-running servers from the agent terminal; ask me to run them and report back

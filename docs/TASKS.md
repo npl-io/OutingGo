@@ -9,7 +9,7 @@ Rules: see `.continue/rules/project.md` and `docs/PLAN.md`.
 Existing scaffold in `backend/`, `frontend/`, `database/schema.sql` is kept. Every task starts by AUDITING what exists, then adds only what is missing. Do not rewrite working files.
 
 ## T0.1 Repo hygiene and shared tooling
-Status: TODO
+Status: DONE
 Branch: `chore/repo-tooling`
 Files: `.gitignore`, `.env.example`, `.prettierrc`, `.editorconfig`, `README.md`
 Decisions already made:
