@@ -27,7 +27,7 @@ Acceptance:
 - [ ] `git status` shows no `node_modules` or `.env`.
 
 ## T0.2 Backend skeleton and core infrastructure
-Status: TODO
+Status: DONE
 Branch: `feat/backend-skeleton`
 Files: `backend/package.json`, `backend/tsconfig.json`, `backend/eslint.config.js`, `backend/vitest.config.ts`, `backend/src/app.ts`, `backend/src/server.ts`, `backend/src/config/env.ts`, `backend/src/errors/AppError.ts`, `backend/src/middlewares/{errorHandler,notFound,requestLogger}.ts`
 Do:
@@ -43,7 +43,7 @@ Acceptance:
 - [ ] `npm run lint`, `npm run typecheck`, `npm test` pass.
 
 ## T0.3 Database, DB pool, seed, health check
-Status: TODO
+Status: DONE
 Branch: `feat/database`
 Files: `docker-compose.yml`, `backend/src/config/db.ts`, `backend/scripts/seed.ts`, `backend/package.json` (script `seed`), update `/health`
 Do:
