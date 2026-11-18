@@ -1,3 +1,4 @@
+
 import { Pool, types } from 'pg';
 import type { QueryResult, QueryResultRow } from 'pg';
 import { env } from './env';
@@ -9,6 +10,10 @@ types.setTypeParser(20, (value: string) => Number(value));
 types.setTypeParser(1700, (value: string) => parseFloat(value));
 
 export const pool = new Pool({ connectionString: env.DATABASE_URL });
+
+pool.on('error', (err: Error) => {
+  console.error('Postgres pool error:', err.message);
+});
 
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,

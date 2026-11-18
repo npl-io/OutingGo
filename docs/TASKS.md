@@ -72,102 +72,61 @@ Acceptance:
 **M0 checkpoint:** local `docker compose up` works, 11 tables exist, test users are seeded, `/health` is OK on the public URL. (ER diagram moved to M8.)
 ---
 
-# M1 — Authentication
+# M1 — Authentication (4 tasks, one commit each)
 
-## T1.1 Zod schemas and validation middleware
+## T1.1 Backend auth core (validation, repository, service)
 Status: TODO
-Branch: `feat/validation`
-Files: `backend/src/middlewares/validate.ts`, `backend/src/schemas/auth.schema.ts`
+Branch: `feat/auth-core`
+Files: `backend/src/middlewares/validate.ts`, `backend/src/schemas/auth.schema.ts`, `backend/src/repositories/userRepository.ts`, `backend/src/services/authService.ts`, `backend/src/config/db.ts`, tests in `backend/tests/`
 Do:
-- `validate({ body?, params?, query? })` middleware: parse with Zod, replace the request data with the parsed result, and on failure return `422 VALIDATION_ERROR` with `details` listing each field and a specific message.
-- Schemas: `registerSchema` (email format, password at least 8 characters with a letter and a digit, full name 2-100 characters, optional phone) and `loginSchema`.
+- `validate({ body?, params?, query? })`: parse with Zod, replace request data with the parsed result, on failure return `422 VALIDATION_ERROR` with `details` listing each field and a specific message.
+- `registerSchema`: email (format; trim and lowercase it), password (at least 8 characters, with a letter and a digit), full name (2-100 characters), optional phone. `loginSchema`: email (trim and lowercase), password.
+- `userRepository`: `findByEmail`, `findById`, `create`. Parameterized SQL, camelCase typed results. `password_hash` is returned only by `findByEmail`.
+- `authService.register`: duplicate email -> `409 EMAIL_TAKEN`; bcrypt hash; role `USER`.
+- `authService.login`: unknown email and wrong password both -> `401 INVALID_CREDENTIALS`; inactive user -> `403 ACCOUNT_DISABLED`; success returns a JWT (payload: user id and role; expiry from env) and the user without `password_hash`.
+- `db.ts`: add `pool.on('error', ...)` that logs the message so a dropped connection (Neon can pause) does not crash the server.
 Acceptance:
-- [ ] Unit tests: valid input passes; invalid email, short password, and a missing field each produce clear messages.
+- [ ] Unit tests (repository mocked): valid and invalid register/login input; duplicate email; wrong password; inactive user; successful login.
+- [ ] Passwords and hashes are never logged or returned. lint, typecheck, test pass.
 
-## T1.2 User repository and auth service
-Status: TODO
-Branch: `feat/auth-service`
-Files: `backend/src/repositories/userRepository.ts`, `backend/src/services/authService.ts`, `backend/src/config` (JWT settings only if needed)
-Do:
-- `userRepository`: `findByEmail`, `findById`, `create` (parameterized SQL, returns typed objects in camelCase, never returns `password_hash` except from `findByEmail` for login).
-- `authService.register`: reject duplicate email with `409 EMAIL_TAKEN`, hash with bcrypt, create the user with the `USER` role.
-- `authService.login`: verify password; reject unknown email and wrong password with the same `401 INVALID_CREDENTIALS`; reject inactive users with `403 ACCOUNT_DISABLED`; return a JWT (payload: user id and role, expiry from env) and the user without `password_hash`.
-Acceptance:
-- [ ] Unit tests (repository mocked): duplicate email, wrong password, inactive user, successful login.
-- [ ] Passwords are never logged or returned.
-
-## T1.3 Auth routes and controller
+## T1.2 Auth endpoints, middlewares, integration tests
 Status: TODO
 Branch: `feat/auth-endpoints`
-Files: `backend/src/routes/authRoutes.ts`, `backend/src/controllers/authController.ts`, `backend/src/app.ts`
+Manual first (me): `npm i -D supertest @types/supertest` in `backend/`; create database `outinggo_test` in the Docker Postgres and load `schema.sql` into it; add `TEST_DATABASE_URL` to `backend/.env` and to the root `.env.example`.
+Files: `backend/src/routes/authRoutes.ts`, `backend/src/controllers/authController.ts`, `backend/src/middlewares/authenticate.ts`, `backend/src/middlewares/authorize.ts`, `backend/src/types/express.d.ts`, `backend/src/app.ts`, `backend/tests/auth.integration.test.ts`
 Do:
-- `POST /api/v1/auth/register` (201), `POST /api/v1/auth/login` (200). Apply `express-rate-limit` to both (for example 10 requests per 15 minutes per IP).
-- Controllers only call the service and shape the response.
-- Configure `cors` to allow only the frontend origin from env (`CORS_ORIGIN`, add to `.env.example`).
+- `POST /api/v1/auth/register` (201), `POST /api/v1/auth/login` (200), `GET /api/v1/auth/me` (authenticated). Rate limit register and login (10 requests per 15 minutes per IP). Controllers only call the service.
+- `cors` allows only `CORS_ORIGIN`; keep `helmet`.
+- `authenticate`: read `Authorization: Bearer <token>`, verify, load the user, `401` for missing/invalid/expired tokens, attach `req.user` (id, role). `authorize(...roles)`: `403 FORBIDDEN` for other roles. No admin endpoint yet: test `authorize` with a dummy route created inside the test.
+- Integration tests use `TEST_DATABASE_URL` only, clean tables between tests, never the development database.
 Acceptance:
-- [ ] Register then login returns a token (tested by hand with a REST client).
-- [ ] The 11th rapid login attempt returns 429.
+- [ ] Tests cover: register -> login -> `/auth/me`; duplicate email 409; wrong password 401; missing token 401; invalid input 422; wrong role 403.
+- [ ] By hand: the 11th rapid login attempt returns 429. lint, typecheck, test pass.
 
-## T1.4 Authenticate and authorize middlewares, `/auth/me`
+## T1.3 Frontend: foundation and auth pages
 Status: TODO
-Branch: `feat/auth-middleware`
-Files: `backend/src/middlewares/authenticate.ts`, `backend/src/middlewares/authorize.ts`, `backend/src/types/express.d.ts`, update `authRoutes.ts`
+Branch: `feat/frontend-auth`
+Manual first (me): `npm i react-router-dom @tanstack/react-query tailwindcss @tailwindcss/vite` in `frontend/`.
+Files: `frontend/vite.config.ts`, `frontend/src/api/client.ts`, `frontend/src/auth/AuthContext.tsx`, `frontend/src/auth/ProtectedRoute.tsx`, `frontend/src/pages/{LoginPage,RegisterPage,HomePage}.tsx`, `frontend/src/components/Layout.tsx`, `frontend/src/App.tsx`
 Do:
-- `authenticate`: read `Authorization: Bearer <token>`, verify, load the user, reject missing/invalid/expired tokens with `401`, attach `req.user` (id, role).
-- `authorize(...roles)`: `403 FORBIDDEN` if `req.user.role` is not allowed.
-- `GET /api/v1/auth/me` (authenticated) returns the current user without `password_hash`.
-- Do not add any admin endpoint yet; test `authorize` through a dummy route created only inside the test.
+- Check that the Vite scaffold runs first. Remove the demo content. Configure Tailwind and a Vite dev proxy `/api` -> backend.
+- `client.ts`: fetch wrapper that adds the Bearer token, unwraps `{ data }` and `{ error }`, throws a typed error.
+- `AuthContext`: user and token (localStorage), `login`, `register`, `logout`, loads `/auth/me` on startup. `ProtectedRoute` redirects to `/login`.
+- Login and Register forms: specific client-side validation messages, disabled submit and loading state while sending, server errors shown clearly, form data kept on error.
+- Responsive layout with navigation that changes by login state and a logout button. `HomePage` placeholder shows name and role.
 Acceptance:
-- [ ] Unit tests: no token → 401, bad token → 401, wrong role → 403, correct role → passes.
-- [ ] `/auth/me` works with a valid token.
+- [ ] `npm run lint` and `npm run build` pass in `frontend/`.
+- [ ] I can register, log out, log in, and see my name and role; a wrong password shows a clear message; a protected page redirects to `/login` when logged out; usable at 375 px width.
 
-## T1.5 Auth integration tests
-Status: TODO
-Branch: `test/auth-integration`
-Files: `backend/tests/auth.integration.test.ts`, test setup/teardown helpers
-Do:
-- Add `supertest` as a dev dependency (approved). Use a separate test database (for example `outinggo_test`) created from `schema.sql`; clean tables between tests.
-- Cover: register → login → `/auth/me`; duplicate email → 409; wrong password → 401; missing token → 401; invalid input → 422.
-Acceptance:
-- [ ] `npm test` passes locally with the Docker database running.
-- [ ] Tests never touch the development database.
-
-## T1.6 Frontend foundation
-Status: TODO
-Branch: `feat/frontend-foundation`
-Files: `frontend/package.json`, `frontend/vite.config.ts`, `frontend/src/api/client.ts`, `frontend/src/auth/AuthContext.tsx`, `frontend/src/auth/ProtectedRoute.tsx`, `frontend/src/App.tsx`
-Do:
-- First check that the existing Vite scaffold builds and runs.
-- Add `react-router-dom`, `@tanstack/react-query`, Tailwind CSS (Vite plugin). Remove the Vite demo content.
-- `client.ts`: a small fetch wrapper that adds the Bearer token, unwraps the `{ data }` / `{ error }` envelope, and throws a typed error.
-- `AuthContext`: holds the user and token (localStorage), `login`, `register`, `logout`, and loads `/auth/me` on startup.
-- `ProtectedRoute` redirects unauthenticated users to `/login`.
-- Vite dev proxy: `/api` → the backend.
-Acceptance:
-- [ ] `npm run dev`, `npm run lint`, and `npm run build` pass in `frontend/`.
-- [ ] Visiting a protected route while logged out redirects to `/login`.
-
-## T1.7 Login and Register pages
-Status: TODO
-Branch: `feat/auth-pages`
-Files: `frontend/src/pages/LoginPage.tsx`, `frontend/src/pages/RegisterPage.tsx`, `frontend/src/components/Layout.tsx`
-Do:
-- Forms with client-side validation (specific messages), a loading state on the submit button, disabled while submitting, server errors shown clearly, form data preserved on error.
-- A simple responsive layout with navigation (links change based on login state, logout button). A hamburger menu on mobile can wait until M6.
-- After login, go to a placeholder home page showing the user's name and role.
-Acceptance:
-- [ ] I can register, log out, log in, and see my name; wrong password shows a clear message.
-- [ ] The layout is usable at 375 px width.
-
-## T1.8 Deploy the frontend with the backend
+## T1.4 Deploy frontend with backend
 Status: TODO
 Branch: `chore/deploy-fullstack`
-Files: `backend/Dockerfile`, `backend/src/app.ts` (production static serving), `docs/DEPLOYMENT.md`
+Files: `backend/Dockerfile`, `backend/src/app.ts`, `docs/DEPLOYMENT.md`
 Do:
-- Build the frontend and serve `frontend/dist` from Express in production (one service, no CORS issues, one free-tier slot). Unknown non-API routes return `index.html`.
-- Update the Dockerfile to build both packages.
-- Redeploy and update `docs/DEPLOYMENT.md`.
+- Production: Express serves `frontend/dist` and returns `index.html` for unknown non-API routes (one service, no CORS issues).
+- Update the Dockerfile to build the frontend and the backend (the build context must include `frontend/`; adjust the Render root directory and Dockerfile path accordingly).
+- Set `CORS_ORIGIN` on Render to the public URL. Redeploy and update `docs/DEPLOYMENT.md`.
 Acceptance:
-- [ ] The public URL shows the login page; I can register and log in on the live site.
+- [ ] The public URL shows the login page; I can register and log in on the live site as `USER` and as `admin@test.com`.
 
 **M1 checkpoint:** login works as `ADMIN` and `USER` on the public URL; a protected route gives 401/403 correctly; all tests pass.
