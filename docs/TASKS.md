@@ -59,7 +59,7 @@ Acceptance:
 - [ ] By hand in `psql`: duplicate email, rating 6, and a second `LEADER` in one meetup are all rejected.
 
 ## T0.4 Deploy the skeleton
-Status: TODO
+Status: DONE
 Branch: `chore/deploy-skeleton`
 Files: `backend/Dockerfile`, `.dockerignore`, `docs/DEPLOYMENT.md`
 Do:

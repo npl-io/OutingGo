@@ -333,7 +333,7 @@ Each milestone ends with a checkpoint. If a checkpoint fails, fix it before movi
 ---
 
 ## 13. Decisions log
-
+Hosting: Render web service (Docker) + Neon PostgreSQL, to keep the database available through the grading period.”
 - Node + Express + TypeScript chosen to reuse existing TypeScript algorithm code and use one language across the stack (compare with Spring Boot in the report).
 - Raw SQL with `pg`, not an ORM, so the schema, constraints, and indexes stay visible and graded.
 - Graph and venue KD-Tree live in memory; PostgreSQL stores users, venues, and meetups only. No PostGIS.
