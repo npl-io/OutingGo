@@ -83,3 +83,4 @@ Do not try to read or write `.env` files (the IDE blocks them). If a task needs 
  The terminal is Windows PowerShell: never chain commands with `&&`; use `;` or run them separately.
  Do not search the web; ask me if you need information you cannot get from the repo or npm.
 Do not start long-running servers from the agent terminal; ask me to run them and report back
+- Do not edit docs/TASKS.md or docs/AI_LOG.md; I update them by hand. Put the suggested AI_LOG entry in your final summary instead.
