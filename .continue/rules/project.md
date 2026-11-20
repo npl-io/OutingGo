@@ -37,6 +37,10 @@ If the code, the plan, or my instruction conflict, STOP and ask. Do not silently
 - Backend scripts: `npm run dev`, `lint`, `typecheck`, `test`, `seed`.
 - Auth already exists: `authService` (register, login, getMe, verifyToken), `authenticate` / `authorize` / `rateLimiters` middlewares, routes under `/api/v1/auth`. Reuse them; do not re-implement.
 - Validation error details look like `{ field: "body.email", message }` (source prefix included). Login returns `{ data: { token, user } }`; register returns `{ data: { user } }`.
+- - frontend/ is ESM (Vite + React + TypeScript strict); here `import.meta.env` is fine. Scripts: `npm run dev` (port 5173), `lint`, `build`. Tailwind CSS v4 via `@tailwindcss/vite`: src/index.css starts with `@import "tailwindcss";`; there is no tailwind.config.js and no postcss config.
+- API base path is `/api/v1`, reached through the Vite dev proxy (`/api` → http://localhost:3000); in production Express serves the frontend from the same origin. The token is kept in localStorage under `outinggo.token`.
+- Component files export only components (eslint react-refresh rule): keep contexts and hooks in separate files.
+- The agent terminal starts at the repo root, which has no package.json. Always run npm with `npm --prefix backend run <script>` or `npm --prefix frontend run <script>` (PowerShell, no &&).
 
 ## Architecture rules
 
@@ -91,7 +95,7 @@ API conventions:
 1. Restate the task and list the files you will create or change in a few lines. If it touches the schema, wait for my approval; otherwise continue unless I say to wait.
 2. Implement the minimum that meets the acceptance criteria.
 3. Add or update tests (engine code and permission rules MUST have tests).
-4. Run `npm run lint`, `npm run typecheck`, and `npm test` in the affected package. Fix failures. Never weaken, skip, or delete a test to make it pass.
+4. Run lint, typecheck/build and tests with npm --prefix <package>. Fix failures. Never weaken, skip, or delete a test to make it pass.
 5. Finish with a short summary: files changed, how I can verify it by hand, assumptions you made, anything deferred.
 6. Do not edit docs/TASKS.md or docs/AI_LOG.md (I update them by hand). Put a suggested 3-line AI_LOG entry (asked / generated / double-check) in your summary.
 7. Suggest a commit message in the form `type(scope): message`.
