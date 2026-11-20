@@ -75,7 +75,7 @@ Acceptance:
 # M1 — Authentication (4 tasks, one commit each)
 
 ## T1.1 Backend auth core (validation, repository, service)
-Status: TODO
+Status: DONE
 Branch: `feat/auth-core`
 Files: `backend/src/middlewares/validate.ts`, `backend/src/schemas/auth.schema.ts`, `backend/src/repositories/userRepository.ts`, `backend/src/services/authService.ts`, `backend/src/config/db.ts`, tests in `backend/tests/`
 Do:
@@ -90,7 +90,7 @@ Acceptance:
 - [ ] Passwords and hashes are never logged or returned. lint, typecheck, test pass.
 
 ## T1.2 Auth endpoints, middlewares, integration tests
-Status: TODO
+Status: DONE
 Branch: `feat/auth-endpoints`
 Manual first (me): `npm i -D supertest @types/supertest` in `backend/`; create database `outinggo_test` in the Docker Postgres and load `schema.sql` into it; add `TEST_DATABASE_URL` to `backend/.env` and to the root `.env.example`.
 Files: `backend/src/routes/authRoutes.ts`, `backend/src/controllers/authController.ts`, `backend/src/middlewares/authenticate.ts`, `backend/src/middlewares/authorize.ts`, `backend/src/types/express.d.ts`, `backend/src/app.ts`, `backend/tests/auth.integration.test.ts`
@@ -104,7 +104,7 @@ Acceptance:
 - [ ] By hand: the 11th rapid login attempt returns 429. lint, typecheck, test pass.
 
 ## T1.3 Frontend: foundation and auth pages
-Status: TODO
+Status: DONE
 Branch: `feat/frontend-auth`
 Manual first (me): `npm i react-router-dom @tanstack/react-query tailwindcss @tailwindcss/vite` in `frontend/`.
 Files: `frontend/vite.config.ts`, `frontend/src/api/client.ts`, `frontend/src/auth/AuthContext.tsx`, `frontend/src/auth/ProtectedRoute.tsx`, `frontend/src/pages/{LoginPage,RegisterPage,HomePage}.tsx`, `frontend/src/components/Layout.tsx`, `frontend/src/App.tsx`

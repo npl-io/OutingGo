@@ -7,6 +7,8 @@ import { errorHandler } from './middlewares/errorHandler';
 import { notFound } from './middlewares/notFound';
 import { requestLogger } from './middlewares/requestLogger';
 import { authRoutes } from './routes/authRoutes';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export const app = express();
 
@@ -35,6 +37,22 @@ app.get('/api/v1/health', async (_req, res) => {
 });
 
 app.use('/api/v1/auth', authRoutes);
+// Production: serve the built frontend from the same origin as the API.
+if (env.NODE_ENV === 'production') {
+  const frontendDist = path.resolve(process.cwd(), '..', 'frontend', 'dist');
+  if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
+    app.use(express.static(frontendDist));
+    app.use((req, res, next) => {
+      const isPageRequest =
+        (req.method === 'GET' || req.method === 'HEAD') && !req.path.startsWith('/api');
+      if (!isPageRequest) {
+        next();
+        return;
+      }
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+  }
+}
 
 app.use(notFound);
 app.use(errorHandler);
