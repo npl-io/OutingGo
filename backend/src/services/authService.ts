@@ -89,6 +89,14 @@ export async function login(input: LoginInput): Promise<LoginResult> {
   return { token: signToken(user), user: toPublicUser(user) };
 }
 
+export async function getMe(userId: number): Promise<UserRecord> {
+  const user = await userRepository.findById(userId);
+  if (!user) {
+    throw new AppError('INVALID_TOKEN', 401, 'User no longer exists');
+  }
+  return user;
+}
+
 export function verifyToken(token: string): VerifiedToken {
   let decoded: unknown;
   try {
@@ -108,4 +116,3 @@ export function verifyToken(token: string): VerifiedToken {
 
   return { userId: sub, role };
 }
-

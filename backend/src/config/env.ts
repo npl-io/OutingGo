@@ -1,3 +1,4 @@
+
 import 'dotenv/config';
 import { z } from 'zod';
 
@@ -8,6 +9,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1),
   JWT_EXPIRES_IN: z.string().min(1),
   CORS_ORIGIN: z.string().min(1),
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -24,3 +27,4 @@ if (!parsed.success) {
 }
 
 export const env: Env = parsed.data;
+
