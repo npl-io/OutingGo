@@ -119,7 +119,7 @@ Acceptance:
 - [ ] I can register, log out, log in, and see my name and role; a wrong password shows a clear message; a protected page redirects to `/login` when logged out; usable at 375 px width.
 
 ## T1.4 Deploy frontend with backend
-Status: TODO
+Status: DONE
 Branch: `chore/deploy-fullstack`
 Files: `backend/Dockerfile`, `backend/src/app.ts`, `docs/DEPLOYMENT.md`
 Do:
@@ -130,3 +130,46 @@ Acceptance:
 - [ ] The public URL shows the login page; I can register and log in on the live site as `USER` and as `admin@test.com`.
 
 **M1 checkpoint:** login works as `ADMIN` and `USER` on the public URL; a protected route gives 401/403 correctly; all tests pass.
+# M2 — Venues (3 tasks, one commit each)
+
+## T2.1 Real venue data (OSM → database)
+Status: TODO
+Branch: `feat/venue-seed`
+Manual first (me): run the Overpass query given by Claude chat and save the result as `backend/data/venues-osm.json` (gitignored). Create the branch.
+Files: `backend/src/lib/osmVenues.ts` (pure functions), `backend/scripts/seed-venues.ts`, `backend/tests/osmVenues.test.ts`, `backend/package.json` (only the script `seed:venues`)
+Do:
+- Read `backend/scripts/seed.ts` only to get the category slugs. Pure, unit-tested functions in `osmVenues.ts`: `parseOpeningHours(tag?)` (first `HH:MM-HH:MM` match; `24/7` -> 00:00 to 23:59; anything else -> 08:00 to 22:00), `mapCategory(tags)` -> existing category slug or null, `nearestDistrict(lat, lng)` from a constant table of district centers (used only when the OSM tag `addr:district` is missing), `estimatePriceLevel(osmId, categorySlug)` (deterministic 1-3 from a hash of the id, weighted by category; synthetic data), `toVenue(element)` -> record or null (no name or no coordinates -> null; ways use `center`).
+- `seed-venues.ts`: read the JSON, map, dedupe by `osm_id` (stored as `node/123`), keep at most 200 venues in total with a per-category cap and a deterministic selection (stable order by hash of osm_id), insert with parameterized SQL using `WHERE NOT EXISTS (SELECT 1 FROM venues WHERE osm_id = $n)` (idempotent, no schema change), print counts per category and per district.
+Acceptance:
+- [ ] Unit tests pass for the five functions (including `24/7`, missing tag, midnight-crossing hours).
+- [ ] `npm run seed:venues` inserts 100-200 venues across at least 5 categories and several districts; a second run inserts 0.
+- [ ] By hand: lat is about 10.7-10.9 and lng about 106.6-106.8 (not swapped); some venues have non-default hours.
+- [ ] Same seed run once against Neon (me, by hand).
+
+## T2.2 Venues API
+Status: TODO
+Branch: `feat/venues-api`
+Files: `backend/src/schemas/venue.schema.ts`, `backend/src/repositories/venueRepository.ts`, `backend/src/services/venueService.ts`, `backend/src/controllers/venueController.ts`, `backend/src/routes/venueRoutes.ts`, `backend/src/app.ts`, `backend/tests/venues.integration.test.ts`
+Do (all routes require `authenticate`):
+- `GET /api/v1/categories` -> active categories `{ id, name, slug }`.
+- `GET /api/v1/venues/districts` -> sorted distinct districts of active venues (declare before `/venues/:id`).
+- `GET /api/v1/venues` query: `q` (case-insensitive on name or address; escape `%` and `_`), `categoryId`, `district`, `priceLevel` (1-4, comma-separated list allowed), `openAt` (`HH:MM`; open when opening <= t < closing, or for midnight-crossing hours t >= opening OR t < closing), `sort` (default `name:asc`; comma-separated `field:dir`, fields `name | district | priceLevel | createdAt`, at most 3, no duplicates), `page` (default 1), `pageSize` (10, 20, 50 or 100; default 20). Only active venues. Response `{ data: Venue[], meta: { page, pageSize, total } }`; a page beyond the end returns empty data with the right total.
+- ORDER BY comes from a whitelist map only (never from raw input) with `id` as the final tie-breaker so paging is stable. Venue shape: `{ id, name, address, district, lat, lng, category: { id, name, slug }, priceLevel, openingTime, closingTime, phone, description }`, times as `HH:MM`.
+- `GET /api/v1/venues/:id` -> `{ data: { venue } }`; unknown or inactive -> 404 `VENUE_NOT_FOUND`.
+- Integration tests (test DB only; `resetDb` empties categories too, so create what you need): each filter alone and combined; pagination meta and a page beyond the end; multi-column sort; `pageSize=15` -> 422; bad sort field -> 422; `q` containing `%`; `openAt` with a 18:00-02:00 venue (open at 23:30 and 01:00, closed at 12:00); no token -> 401; detail 404.
+Acceptance:
+- [ ] lint, typecheck and tests pass; no string concatenation of user input into SQL.
+
+## T2.3 Venues page
+Status: TODO
+Branch: `feat/venues-page`
+Files: `frontend/src/api/venues.ts`, `frontend/src/hooks/useDebouncedValue.ts`, `frontend/src/pages/VenuesPage.tsx`, `frontend/src/components/{VenueCard,Pagination,Highlight}.tsx`, `frontend/src/components/Layout.tsx` (nav link), `frontend/src/App.tsx` (protected `/venues`)
+Do:
+- Filters: search box (debounced 300 ms), category select, district select, price-level select, "open at" time input, sort select (name A-Z / Z-A, district then name, price low-high / high-low), page-size select (10, 20, 50, 100). All state lives in the URL query string (`useSearchParams`) so a reload or shared link keeps the filters; any filter change resets to page 1.
+- `useQuery` (TanStack Query) with the previous page kept visible while loading. Show: "Showing 21-40 of 156 results", loading state, empty state with a "Clear filters" button, error state with a retry button, venue cards (name with search matches highlighted, category, district, price as 1-4 symbols, hours, address), pagination with previous/next and page numbers.
+- Responsive: filters collapse into a vertical stack on mobile; no horizontal scroll at 375 px; labels and `aria-live` for the results count.
+Acceptance:
+- [ ] `npm run lint` and `npm run build` pass.
+- [ ] By hand on the deployed site: every filter, sort, page size and pagination works; reload keeps the state; empty and error states look right.
+
+**M2 checkpoint:** filter + sort + page-size work on the deployed site with 100+ venues.

@@ -333,14 +333,14 @@ Each milestone ends with a checkpoint. If a checkpoint fails, fix it before movi
 ---
 
 ## 13. Decisions log
-Hosting: Render web service (Docker) + Neon PostgreSQL, to keep the database available through the grading period.”
+Hosting: Render web service (Docker) + Neon PostgreSQL, to keep the database available through the grading period.
 - Node + Express + TypeScript chosen to reuse existing TypeScript algorithm code and use one language across the stack (compare with Spring Boot in the report).
 - Raw SQL with `pg`, not an ORM, so the schema, constraints, and indexes stay visible and graded.
 - Graph and venue KD-Tree live in memory; PostgreSQL stores users, venues, and meetups only. No PostGIS.
 - `meetup_candidates.travel_times` is a JSONB snapshot of computed results (justified denormalization).
 - Access token only for now; refresh tokens are deferred.
 - Moderator exists in `roles` from M0 so the course's "3 account roles" rule is met; its screens come in M6.
-
+- Production: Express serves frontend/dist from the same origin (one Render service, no CORS).
 ---
 
 ## 14. Prompt template for each task
