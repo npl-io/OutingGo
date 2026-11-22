@@ -7,6 +7,8 @@ import { errorHandler } from './middlewares/errorHandler';
 import { notFound } from './middlewares/notFound';
 import { requestLogger } from './middlewares/requestLogger';
 import { authRoutes } from './routes/authRoutes';
+import { venueRoutes } from './routes/venueRoutes';
+
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -37,6 +39,8 @@ app.get('/api/v1/health', async (_req, res) => {
 });
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1', venueRoutes);
+
 // Production: serve the built frontend from the same origin as the API.
 if (env.NODE_ENV === 'production') {
   const frontendDist = path.resolve(process.cwd(), '..', 'frontend', 'dist');
