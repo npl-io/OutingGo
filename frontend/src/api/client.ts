@@ -1,5 +1,5 @@
 import { ApiError } from './types'
-import type { ApiErrorDetails } from './types'
+import type { ApiErrorDetails, PageMeta } from './types'
 
 const TOKEN_KEY = 'outinggo.token'
 
@@ -40,7 +40,12 @@ interface ApiFetchOptions {
   body?: unknown
 }
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+interface ApiEnvelope<T> extends ErrorEnvelope {
+  data?: T
+  meta?: PageMeta
+}
+
+async function requestJson<T>(path: string, options: ApiFetchOptions): Promise<ApiEnvelope<T>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const token = getToken()
   if (token) {
@@ -58,7 +63,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new ApiError(0, 'NETWORK_ERROR', 'Cannot reach the server')
   }
 
-  const json = (await response.json()) as { data?: T } & ErrorEnvelope
+  const json = (await response.json()) as ApiEnvelope<T>
   if (!response.ok) {
     throw new ApiError(
       response.status,
@@ -67,5 +72,15 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       json.error?.details,
     )
   }
+  return json
+}
+
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const json = await requestJson<T>(path, options)
   return json.data as T
+}
+
+export async function apiFetchPage<T>(path: string): Promise<{ data: T; meta: PageMeta }> {
+  const json = await requestJson<T>(path, {})
+  return { data: json.data as T, meta: json.meta as PageMeta }
 }

@@ -14,6 +14,12 @@ export interface ApiErrorDetails {
   message: string
 }
 
+export interface PageMeta {
+  page: number
+  pageSize: number
+  total: number
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string

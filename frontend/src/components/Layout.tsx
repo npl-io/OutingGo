@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Link, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 
 export default function Layout(): ReactElement {
@@ -10,9 +10,23 @@ export default function Layout(): ReactElement {
     <div className="flex min-h-screen flex-col bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
-          <Link to="/" className="text-lg font-bold text-gray-900">
-            OutingGo
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link to="/" className="text-lg font-bold text-gray-900">
+              OutingGo
+            </Link>
+            {authenticated ? (
+              <NavLink
+                to="/venues"
+                className={({ isActive }) =>
+                  isActive
+                    ? 'text-sm font-semibold text-blue-600'
+                    : 'text-sm font-medium text-gray-700 hover:text-gray-900'
+                }
+              >
+                Venues
+              </NavLink>
+            ) : null}
+          </div>
           {authenticated && user ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <span className="text-sm font-medium text-gray-900">{user.fullName}</span>
