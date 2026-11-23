@@ -133,7 +133,7 @@ Acceptance:
 # M2 — Venues (3 tasks, one commit each)
 
 ## T2.1 Real venue data (OSM → database)
-Status: TODO
+Status: DONE
 Branch: `feat/venue-seed`
 Manual first (me): run the Overpass query given by Claude chat and save the result as `backend/data/venues-osm.json` (gitignored). Create the branch.
 Files: `backend/src/lib/osmVenues.ts` (pure functions), `backend/scripts/seed-venues.ts`, `backend/tests/osmVenues.test.ts`, `backend/package.json` (only the script `seed:venues`)
@@ -147,7 +147,7 @@ Acceptance:
 - [ ] Same seed run once against Neon (me, by hand).
 
 ## T2.2 Venues API
-Status: TODO
+Status: DONE
 Branch: `feat/venues-api`
 Files: `backend/src/schemas/venue.schema.ts`, `backend/src/repositories/venueRepository.ts`, `backend/src/services/venueService.ts`, `backend/src/controllers/venueController.ts`, `backend/src/routes/venueRoutes.ts`, `backend/src/app.ts`, `backend/tests/venues.integration.test.ts`
 Do (all routes require `authenticate`):
