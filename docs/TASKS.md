@@ -161,7 +161,7 @@ Acceptance:
 - [ ] lint, typecheck and tests pass; no string concatenation of user input into SQL.
 
 ## T2.3 Venues page
-Status: TODO
+Status: DONE
 Branch: `feat/venues-page`
 Files: `frontend/src/api/venues.ts`, `frontend/src/hooks/useDebouncedValue.ts`, `frontend/src/pages/VenuesPage.tsx`, `frontend/src/components/{VenueCard,Pagination,Highlight}.tsx`, `frontend/src/components/Layout.tsx` (nav link), `frontend/src/App.tsx` (protected `/venues`)
 Do:
@@ -173,3 +173,64 @@ Acceptance:
 - [ ] By hand on the deployed site: every filter, sort, page size and pagination works; reload keeps the state; empty and error states look right.
 
 **M2 checkpoint:** filter + sort + page-size work on the deployed site with 100+ venues.
+
+# M3 — Routing engine (4 tasks, one commit each)
+
+Engine code lives in `backend/src/engine/`: pure TypeScript, no Express, no DB, no env, no file I/O (the file/loader code is the only exception, see T3.3/T3.4), errors are a plain `EngineError`. Tunable constants live in `engine/config.ts`. The old `backend/src/dsa/` is not touched until T3.4.
+
+## T3.1 Heap, KD-tree and geo helpers
+Status: DONE
+Branch: `feat/engine-structures`
+Files: `backend/src/engine/{config,errors,geo,minHeap,kdTree}.ts`, `backend/tests/engine/{minHeap,kdTree,geo}.test.ts`
+Do:
+- `config.ts`: `SPEED_KPH` per highway class (trunk 40, primary 35, secondary 30, tertiary 25, unclassified 25, residential 20, living_street 15, service 15, every `*_link` 20), `DEFAULT_SPEED_KPH` 20, `ROUTING_HIGHWAYS` (trunk, primary, secondary, tertiary, unclassified and their `_link`), `MAX_SNAP_M` 500, `K_CANDIDATES` 40, `TOP_N` 5.
+- `errors.ts`: `EngineError(code, message, details?)` with codes `MEMBER_OUT_OF_COVERAGE`, `NOT_ENOUGH_MEMBERS`, `GRAPH_NOT_LOADED`, `INVALID_GRAPH_FILE`.
+- `geo.ts`: `haversineMeters`, `projectToPlane(lat, lng, refLat)` (equirectangular, meters).
+- `minHeap.ts`: binary min-heap keyed by number with an integer payload, typed arrays that grow; `push`, `pop`, `peek`, `size`, `clear`.
+- `kdTree.ts`: static 2-D KD-tree over (lat, lng) points, median split on projected meters, typed-array storage; `nearest(lat, lng)` and `kNearest(lat, lng, k)` (sorted ascending, each with `index` and `distanceM`).
+Acceptance:
+- [ ] Tests: heap order with duplicates, growth past the initial capacity, empty pop; KD-tree against a linear scan on 2,000 random points (nearest and kNearest for several k, k larger than n, duplicate points, empty tree); a known haversine distance.
+- [ ] lint, typecheck and test pass.
+
+## T3.2 Graph, Dijkstra, opening hours, scoring
+Status: TODO
+Branch: `feat/engine-routing`
+Files: `backend/src/engine/{graph,dijkstra,openingHours,scoring}.ts`, `backend/tests/engine/{graph,dijkstra,openingHours,scoring}.test.ts`
+Do:
+- `graph.ts`: CSR graph (`offsets` Uint32Array(n+1), `targets` Uint32Array(m), `weights` Float32Array(m) in seconds, `lat` and `lng` Float64Array(n)); `buildGraph(nodes, edges)` from a plain list of `{ from, to, seconds }`.
+- `dijkstra.ts`: `shortestTimes(graph, source, targets, { withParents? })` returns the time to each target (Infinity when unreachable) and optional parents; single-source, stops early once all targets are settled, MinHeap with lazy deletion; `reconstructPath(parents, source, target)`.
+- `openingHours.ts`: `isOpenAt(opening, closing, minuteOfDay)` with the same rule as the SQL in `venueRepository.ts`.
+- `scoring.ts`: `scoreCandidates(times, objective)` where `times[member][candidate]`; drop candidates that are Infinity for any member; `MIN_TOTAL` sorts by total, then max, then index; `MIN_SPREAD` by (max - min), then total, then index.
+Acceptance:
+- [ ] Tests: hand-made graph with known answers, a one-way edge, an unreachable target, source equals target, several targets, early stop equals a full run, a rebuilt path whose weights sum to the reported time, random graphs (20 seeds, 30-60 nodes) against a Bellman-Ford oracle written in the test, an `isOpenAt` table (normal range, crossing midnight, boundaries, equal times) that matches the SQL rule, and scoring with ties and Infinity.
+- [ ] lint, typecheck and test pass.
+
+## T3.3 Offline graph builder
+Status: TODO
+Branch: `feat/graph-build`
+Manual first (me): download the roads JSON with the Overpass query given by Claude chat, save as `backend/data/roads-osm.json` (gitignored).
+Files: `backend/src/lib/osmRoads.ts` (pure), `backend/src/engine/graphFile.ts`, `backend/scripts/build-graph.ts`, `backend/scripts/overpass-roads.txt`, `backend/tests/osmRoads.test.ts`, `backend/tests/engine/graphFile.test.ts`, `backend/package.json` (script `build:graph`)
+Do:
+- `osmRoads.ts`: `isRoutable(tags)` (highway in `ROUTING_HIGHWAYS`; not `access=no/private`), `speedFor(highway)`, `isOneWay(tags)` (`yes/true/1` forward, `-1` reversed, roundabouts forward, `no` both), `wayToEdges(way, coordinates)` (consecutive node pairs, length by haversine, seconds = length / (kph / 3.6)), `largestStronglyConnected(nodeCount, edges)` written WITHOUT recursion.
+- `graphFile.ts`: binary format (magic `OGRF`, version, nodeCount, edgeCount, then the typed arrays, little-endian); `serializeGraph` and `deserializeGraph` with validation (`INVALID_GRAPH_FILE`).
+- `build-graph.ts`: read the JSON, keep only nodes used by routable ways, compact ids, keep the largest strongly connected component, write `backend/data/graph.bin`; print nodes, edges, file size, bounding box.
+- `graph.bin` is committed (the Docker image needs it); `roads-osm.json` stays ignored.
+Acceptance:
+- [ ] Tests: `isOneWay` table, `wayToEdges` (two-way and one-way), the SCC on a small graph with a dead-end and a one-way spur, the SCC on a 200,000-node chain (no stack overflow), serialize and deserialize round trip plus a corrupted header.
+- [ ] `npm run build:graph` prints plausible counts (tens of thousands of nodes, file of a few MB).
+
+## T3.4 Graph store, recommendation core, try script
+Status: TODO
+Branch: `feat/engine-recommend`
+Files: `backend/src/engine/{graphStore,recommend}.ts`, `backend/scripts/try-recommend.ts`, `backend/src/server.ts`, `backend/src/config/env.ts` (`GRAPH_FILE`, default `data/graph.bin`), `Dockerfile`, `backend/tests/engine/recommend.test.ts`, `backend/package.json` (script `try:recommend`)
+Do:
+- `graphStore.ts`: `loadGraphStore(path)` reads the file, builds the node KD-tree; `snap(lat, lng)` returns the node and distance, or null beyond `MAX_SNAP_M`; logs nodes, edges, load time and memory in MB; `getGraphStore()` throws `GRAPH_NOT_LOADED`. `server.ts` loads it before listening and exits with a clear message when the file is missing.
+- `recommend.ts`: `recommend(store, { members, venues, minuteOfDay, objective, topN?, kCandidates? })` follows `docs/PLAN.md` section 6.4 (at least 2 members, snap members, filter by `isOpenAt`, centroid, `kNearest`, snap venues, one `shortestTimes` per member, score, top N with per-member seconds); also `routeFor(store, member, venue)` returning `[lat, lng][]`.
+- `try-recommend.ts`: three sample members (central area, Gò Vấp, near the Thủ Đức campus), venues read from the dev DB, prints a ranked table and timing.
+- Dockerfile copies `backend/data/graph.bin`. Delete `backend/src/dsa/` only if nothing imports it.
+Acceptance:
+- [ ] Tests on a synthetic 10x10 grid (no files): both objectives give different winners on a crafted case, a closed venue is excluded, a member out of coverage raises `MEMBER_OUT_OF_COVERAGE`, an unreachable venue is dropped, and `routeFor` length matches the reported time.
+- [ ] `npm run try:recommend` prints sensible rankings; startup time and memory are logged.
+- [ ] By hand: compare 3 member-to-venue times with Google Maps (cars, so expect the same order of magnitude, not exact minutes) and note them for the report.
+
+**M3 checkpoint:** all engine tests pass, `try:recommend` ranks real venues sensibly, and the graph loads at startup with time and memory logged.
