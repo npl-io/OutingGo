@@ -193,7 +193,7 @@ Acceptance:
 - [ ] lint, typecheck and test pass.
 
 ## T3.2 Graph, Dijkstra, opening hours, scoring
-Status: TODO
+Status: DONE
 Branch: `feat/engine-routing`
 Files: `backend/src/engine/{graph,dijkstra,openingHours,scoring}.ts`, `backend/tests/engine/{graph,dijkstra,openingHours,scoring}.test.ts`
 Do:
@@ -206,7 +206,7 @@ Acceptance:
 - [ ] lint, typecheck and test pass.
 
 ## T3.3 Offline graph builder
-Status: TODO
+Status: DONE
 Branch: `feat/graph-build`
 Manual first (me): download the roads JSON with the Overpass query given by Claude chat, save as `backend/data/roads-osm.json` (gitignored).
 Files: `backend/src/lib/osmRoads.ts` (pure), `backend/src/engine/graphFile.ts`, `backend/scripts/build-graph.ts`, `backend/scripts/overpass-roads.txt`, `backend/tests/osmRoads.test.ts`, `backend/tests/engine/graphFile.test.ts`, `backend/package.json` (script `build:graph`)
