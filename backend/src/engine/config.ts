@@ -42,6 +42,12 @@ export const ROUTING_HIGHWAYS: readonly string[] = [
 /** Maximum distance in meters a point may be snapped to the road graph. */
 export const MAX_SNAP_M = 500;
 
+/**
+ * Speed (km/h) for riding from the pin to the nearest road node and from the
+ * road node to the venue, in alleys that are not in the graph.
+ */
+export const OFF_ROAD_KPH = 15;
+
 /** Number of candidate graph nodes considered when snapping a point. */
 export const K_CANDIDATES = 40;
 

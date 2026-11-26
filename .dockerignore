@@ -6,3 +6,4 @@
 .continue
 docs
 database
+backend/data/*.json

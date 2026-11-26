@@ -21,6 +21,8 @@ WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=backend-build /app/backend/dist ./dist
+COPY backend/data/graph.bin ./data/graph.bin
+
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 USER node
 EXPOSE 3000

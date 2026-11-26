@@ -10,6 +10,7 @@
     "seed": "tsx scripts/seed.ts",
     "seed:venues": "tsx scripts/seed-venues.ts",
     "build:graph": "tsx scripts/build-graph.ts",
+    "try:recommend": "tsx scripts/try-recommend.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

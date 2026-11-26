@@ -9,6 +9,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1),
   JWT_EXPIRES_IN: z.string().min(1),
   CORS_ORIGIN: z.string().min(1),
+  GRAPH_FILE: z.string().min(1).default('data/graph.bin'),
+
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 });
