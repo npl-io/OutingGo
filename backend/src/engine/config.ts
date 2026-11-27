@@ -48,8 +48,12 @@ export const MAX_SNAP_M = 500;
  */
 export const OFF_ROAD_KPH = 15;
 
-/** Number of candidate graph nodes considered when snapping a point. */
-export const K_CANDIDATES = 40;
+/**
+ * For MIN_SPREAD only venues whose total travel time is within this factor of
+ * the best total are ranked by spread, so a far venue that is equally far for
+ * everyone cannot win.
+ */
+export const SPREAD_TOTAL_TOLERANCE = 1.5;
 
 /** Number of venues returned by the recommendation engine. */
 export const TOP_N = 5;

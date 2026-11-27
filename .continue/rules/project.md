@@ -41,6 +41,7 @@ If the code, the plan, or my instruction conflict, STOP and ask. Do not silently
 - API base path is `/api/v1`, reached through the Vite dev proxy (`/api` → http://localhost:3000); in production Express serves the frontend from the same origin. The token is kept in localStorage under `outinggo.token`.
 - Component files export only components (eslint react-refresh rule): keep contexts and hooks in separate files.
 - The agent terminal starts at the repo root, which has no package.json. Always run npm with `npm --prefix backend run <script>` or `npm --prefix frontend run <script>` (PowerShell, no &&).
+- engine/graphStore.ts and engine/graphFile.ts are the only engine files allowed to touch the file system (loading graph.bin); everything else in engine/ stays free of I/O. Engine input errors use EngineError with code INVALID_INPUT (the service layer maps it to HTTP 422), never RangeError.
 
 ## Architecture rules
 

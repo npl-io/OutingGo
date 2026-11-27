@@ -119,17 +119,77 @@ describe('recommend filtering', () => {
     }
   });
 
-  it('rejects duplicate member ids and bad topN / kCandidates', () => {
+  it('rejects duplicate member ids and bad topN / kCandidates with INVALID_INPUT', () => {
     const base: RecommendOptions = {
       members: [member(1, 1, 1), member(1, 2, 2)],
       venues,
       minuteOfDay: NOON,
       objective: 'MIN_TOTAL',
     };
-    expect(() => recommend(store, base)).toThrow(RangeError);
+    const duplicate = engineErrorOf(() => recommend(store, base));
+    expect(duplicate.code).toBe('INVALID_INPUT');
+
     const ok = [member(1, 1, 1), member(2, 2, 2)];
-    expect(() => recommend(store, { ...base, members: ok, topN: 0 })).toThrow(RangeError);
-    expect(() => recommend(store, { ...base, members: ok, kCandidates: 1.5 })).toThrow(RangeError);
+    const badTopN = engineErrorOf(() => recommend(store, { ...base, members: ok, topN: 0 }));
+    expect(badTopN.code).toBe('INVALID_INPUT');
+
+    const badK = engineErrorOf(() =>
+      recommend(store, { ...base, members: ok, kCandidates: 1.5 }),
+    );
+    expect(badK.code).toBe('INVALID_INPUT');
+  });
+});
+
+describe('recommend input validation', () => {
+  const valid: RecommendOptions = {
+    members: [member(1, 1, 1), member(2, 2, 2)],
+    venues: [venue(1, 3, 3)],
+    minuteOfDay: NOON,
+    objective: 'MIN_TOTAL',
+  };
+
+  it('rejects a NaN member latitude with the member id in details', () => {
+    const error = engineErrorOf(() =>
+      recommend(store, {
+        ...valid,
+        members: [{ id: 7, lat: Number.NaN, lng: 106.7 }, member(2, 2, 2)],
+      }),
+    );
+    expect(error.code).toBe('INVALID_INPUT');
+    expect(error.details).toMatchObject({ memberId: 7 });
+  });
+
+  it('rejects an Infinity venue longitude with the venue id in details', () => {
+    const error = engineErrorOf(() =>
+      recommend(store, {
+        ...valid,
+        venues: [{ id: 9, lat: 10.8, lng: Infinity, ...ALWAYS_OPEN }],
+      }),
+    );
+    expect(error.code).toBe('INVALID_INPUT');
+    expect(error.details).toMatchObject({ venueId: 9 });
+  });
+
+  it('rejects a latitude of 91 with the id in details', () => {
+    const error = engineErrorOf(() =>
+      recommend(store, {
+        ...valid,
+        members: [{ id: 3, lat: 91, lng: 106.7 }, member(2, 2, 2)],
+      }),
+    );
+    expect(error.code).toBe('INVALID_INPUT');
+    expect(error.details).toMatchObject({ memberId: 3 });
+  });
+
+  it('rejects an invalid minuteOfDay and accepts 0 and 1439', () => {
+    for (const bad of [1440, -1, 1.5, Number.NaN]) {
+      const error = engineErrorOf(() => recommend(store, { ...valid, minuteOfDay: bad }));
+      expect(error.code).toBe('INVALID_INPUT');
+    }
+    for (const good of [0, 1439]) {
+      const result = recommend(store, { ...valid, minuteOfDay: good });
+      expect(result.candidates.map((c) => c.venueId)).toEqual([1]);
+    }
   });
 });
 
@@ -230,6 +290,63 @@ describe('recommend options and output', () => {
     for (const c of result.candidates) {
       expect(expected.has(c.venueId)).toBe(true);
     }
+  });
+
+  it('evaluates every open venue by default, so a fast-corridor venue can beat nearer ones', () => {
+    const corridor = createGraphStore(
+      makeGridGraph(SIZE, SIZE, {
+        edgeMultiplier: (a, b) => {
+          if (a.row === 0 && b.row === 0) return 0.1;
+          if ((a.row === 1 && b.row === 2) || (a.row === 2 && b.row === 1)) return 10;
+          return 1;
+        },
+      }),
+    );
+    const members = [member(1, 1, 4), member(2, 1, 5)];
+    const venues = [venue(10, 0, 9), venue(11, 2, 4), venue(12, 2, 5)];
+
+    const nodeOf = (m: RecommendMember): number => {
+      const row = Math.round((m.lat - gridPoint(0, 0).lat) / 0.0045);
+      const col = Math.round((m.lng - gridPoint(0, 0).lng) / 0.0046);
+      return gridNodeId(row, col, SIZE);
+    };
+    const allNodes = Array.from({ length: corridor.graph.nodeCount }, (_, i) => i);
+    const fullTimes = members.map((m) => shortestTimes(corridor.graph, nodeOf(m), allNodes).times);
+    const rows = venues.map((v, index) => {
+      const seconds = fullTimes.map((t) => Math.round(t[nodeOf(v)]!));
+      return { id: v.id, index, total: seconds.reduce((a, b) => a + b, 0) };
+    });
+    const expected = [...rows].sort((a, b) => a.total - b.total || a.index - b.index);
+
+    const result = recommend(corridor, { members, venues, minuteOfDay: NOON, objective: 'MIN_TOTAL' });
+    expect(result.candidates.map((c) => c.venueId)).toEqual(expected.map((e) => e.id));
+    expect(result.candidates[0]!.venueId).toBe(10);
+    expect(result.candidates[0]!.totalSec).toBe(expected[0]!.total);
+
+    const limited = recommend(corridor, {
+      members,
+      venues,
+      minuteOfDay: NOON,
+      objective: 'MIN_TOTAL',
+      kCandidates: 2,
+    });
+    expect(limited.stats.considered).toBe(2);
+    expect(limited.candidates.some((c) => c.venueId === 10)).toBe(false);
+  });
+
+  it('gives a member exactly at a venue node only the off-road legs for that venue', () => {
+    const members = [member(1, 5, 5), member(2, 8, 8)];
+    const venues = [venue(1, 5, 5), venue(2, 9, 9)];
+    const result = recommend(store, {
+      members,
+      venues,
+      minuteOfDay: NOON,
+      objective: 'MIN_TOTAL',
+      topN: 10,
+    });
+    const atNode = result.candidates.find((c) => c.venueId === 1);
+    expect(atNode).toBeDefined();
+    expect(atNode!.memberSeconds[0]!.seconds).toBe(0);
   });
 
   it('adds the off-road time of a pin 300 m from its node to every venue', () => {

@@ -1,5 +1,6 @@
 /** Error codes thrown by the routing/recommendation engine. */
 export type EngineErrorCode =
+  | 'INVALID_INPUT'
   | 'MEMBER_OUT_OF_COVERAGE'
   | 'NOT_ENOUGH_MEMBERS'
   | 'GRAPH_NOT_LOADED'

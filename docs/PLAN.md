@@ -170,6 +170,8 @@ A pin or venue is snapped to the nearest graph node with the node KD-Tree. If th
 
 Route lines: `GET .../routes` runs Dijkstra with parent pointers from each member to the chosen venue and returns coordinate arrays. Compute on demand; do not store.
 
+Evaluate every open venue (about 200; one Dijkstra per member is about 3 ms). An optional kCandidates cap uses the venue KD-tree for larger datasets", và bước 6 thành "MIN_SPREAD = max minus min among venues whose total is within 1.5× the best total; the rest follow, ordered by total
+
 ### 6.5 Later (M7)
 
 - **Union-Find ride-share:** union members whose pairwise travel time is below `RIDE_SHARE_MAX_SEC`; return the groups as suggestions. Add member nodes to the Dijkstra targets so pairwise times come from the same runs.

@@ -51,6 +51,67 @@ describe('scoreCandidates', () => {
     expect(order(scoreCandidates(times, 'MIN_SPREAD'))).toEqual([1, 2, 0]);
   });
 
+  it('keeps a far venue with spread 0 from beating a nearby one under MIN_SPREAD', () => {
+    // c0: total 1260, spread 60; c1: total 4800, spread 0. c1 is more than
+    // 1.5x the best total, so it must not win despite its perfect spread.
+    const times = [
+      [600, 2400],
+      [660, 2400],
+    ];
+    expect(order(scoreCandidates(times, 'MIN_SPREAD'))).toEqual([0, 1]);
+  });
+
+  it('still chooses the second candidate for the (10,50) vs (30,31) case', () => {
+    const times = [
+      [10, 30],
+      [50, 31],
+    ];
+    expect(order(scoreCandidates(times, 'MIN_SPREAD'))).toEqual([1, 0]);
+  });
+
+  it('with tolerance 1 only the best-total candidate is eligible', () => {
+    const times = [
+      [10, 30],
+      [50, 31],
+    ];
+    expect(order(scoreCandidates(times, 'MIN_SPREAD', { spreadTotalTolerance: 1 }))).toEqual([
+      0, 1,
+    ]);
+  });
+
+  it('rejects an invalid spreadTotalTolerance', () => {
+    for (const tolerance of [Number.NaN, Infinity, 0, 0.5, -1]) {
+      try {
+        scoreCandidates([[1], [1]], 'MIN_SPREAD', { spreadTotalTolerance: tolerance });
+        expect.unreachable();
+      } catch (error) {
+        expect(error).toBeInstanceOf(EngineError);
+        expect((error as EngineError).code).toBe('INVALID_INPUT');
+      }
+    }
+  });
+
+  it('ranks eligible candidates before non-eligible ones', () => {
+    // c0: total 200, spread 0 (non-eligible); c1: total 20, spread 0;
+    // c2: total 23, spread 1. Eligible group must come first even though c0
+    // has a smaller spread than c2.
+    const times = [
+      [100, 10, 11],
+      [100, 10, 12],
+    ];
+    expect(order(scoreCandidates(times, 'MIN_SPREAD'))).toEqual([1, 2, 0]);
+  });
+
+  it('breaks ties inside the eligible group by spread, then total, then index', () => {
+    // min total 40; threshold 60 keeps all eligible. c2 wins on spread, then
+    // c1 beats c0 on the spread tie via its smaller total.
+    const times = [
+      [27, 17, 20],
+      [33, 23, 20],
+    ];
+    expect(order(scoreCandidates(times, 'MIN_SPREAD'))).toEqual([2, 1, 0]);
+  });
+
   it('drops a candidate that is Infinity or NaN for any member', () => {
     const times = [
       [10, Infinity, 10, 10],
@@ -84,8 +145,14 @@ describe('scoreCandidates', () => {
     }
   });
 
-  it('throws RangeError when rows have different lengths', () => {
-    expect(() => scoreCandidates([[1, 2], [1]], 'MIN_TOTAL')).toThrow(RangeError);
+  it('throws EngineError INVALID_INPUT when rows have different lengths', () => {
+    try {
+      scoreCandidates([[1, 2], [1]], 'MIN_TOTAL');
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(EngineError);
+      expect((error as EngineError).code).toBe('INVALID_INPUT');
+    }
   });
 
   it('does not mutate the input', () => {

@@ -30,8 +30,14 @@ function randomEdges(seed: number, n: number): Edge[] {
     edges.push({
       from: Math.floor(rng() * n),
       to: Math.floor(rng() * n),
-      seconds: 1 + Math.floor(rng() * 50),
+      seconds: Math.floor(rng() * 51),
     });
+  }
+  // Guarantee parallel edges in a deterministic subset of the random graphs.
+  if (seed % 3 === 0 && edges.length > 0) {
+    const base = edges[0]!;
+    edges.push({ from: base.from, to: base.to, seconds: (base.seconds + 17) % 51 });
+    edges.push({ from: base.from, to: base.to, seconds: (base.seconds + 29) % 51 });
   }
   return edges;
 }

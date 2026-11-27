@@ -1,4 +1,4 @@
-import { K_CANDIDATES, MAX_SNAP_M, TOP_N } from './config';
+import { MAX_SNAP_M, TOP_N } from './config';
 import { reconstructPath, shortestTimes } from './dijkstra';
 import { EngineError } from './errors';
 import { haversineMeters } from './geo';
@@ -59,32 +59,84 @@ function isPositiveInteger(value: number): boolean {
   return Number.isInteger(value) && value > 0;
 }
 
+function invalidInput(
+  field: string,
+  message: string,
+  extra?: Record<string, unknown>,
+): EngineError {
+  return new EngineError('INVALID_INPUT', message, extra === undefined ? { field } : { field, ...extra });
+}
+
+function validLat(lat: number): boolean {
+  return Number.isFinite(lat) && lat >= -90 && lat <= 90;
+}
+
+function validLng(lng: number): boolean {
+  return Number.isFinite(lng) && lng >= -180 && lng <= 180;
+}
+
 /**
  * Ranks the venues that are open at minuteOfDay for a group of members, using
- * one single-source Dijkstra per member over the road graph. Only the
- * kCandidates open venues nearest to the members' centroid are evaluated.
- * Travel time = pin-to-road + road graph + road-to-venue.
+ * one single-source Dijkstra per member over the road graph. When kCandidates
+ * is given, only that many open venues nearest to the members' centroid are
+ * evaluated; otherwise every open venue is. Travel time = pin-to-road + road
+ * graph + road-to-venue.
  * @throws EngineError NOT_ENOUGH_MEMBERS with fewer than 2 members,
- * MEMBER_OUT_OF_COVERAGE when a pin is too far from every road node.
- * @throws RangeError on duplicate member ids or a non-positive-integer topN / kCandidates.
+ * MEMBER_OUT_OF_COVERAGE when a pin is too far from every road node,
+ * INVALID_INPUT for duplicate member ids, invalid coordinates, a bad topN /
+ * kCandidates, or a minuteOfDay outside 0..1439.
  */
 export function recommend(store: GraphStore, options: RecommendOptions): RecommendResult {
   const started = performance.now();
   const { members, venues, minuteOfDay, objective } = options;
   const topN = options.topN ?? TOP_N;
-  const kCandidates = options.kCandidates ?? K_CANDIDATES;
+  const kCandidates = options.kCandidates;
 
   if (members.length < 2) {
     throw new EngineError('NOT_ENOUGH_MEMBERS', 'At least 2 members are required to recommend venues');
   }
-  if (new Set(members.map((m) => m.id)).size !== members.length) {
-    throw new RangeError('recommend: member ids must be unique');
+  const memberIds = new Set<number>();
+  for (let i = 0; i < members.length; i += 1) {
+    const id = members[i]!.id;
+    if (memberIds.has(id)) {
+      throw invalidInput('members', `member ids must be unique, duplicated id ${id}`);
+    }
+    memberIds.add(id);
   }
   if (!isPositiveInteger(topN)) {
-    throw new RangeError(`recommend: topN must be a positive integer, got ${topN}`);
+    throw invalidInput('topN', `topN must be a positive integer, got ${topN}`);
   }
-  if (!isPositiveInteger(kCandidates)) {
-    throw new RangeError(`recommend: kCandidates must be a positive integer, got ${kCandidates}`);
+  if (kCandidates !== undefined && !isPositiveInteger(kCandidates)) {
+    throw invalidInput('kCandidates', `kCandidates must be a positive integer, got ${kCandidates}`);
+  }
+  for (let i = 0; i < members.length; i += 1) {
+    const member = members[i]!;
+    if (!validLat(member.lat)) {
+      throw invalidInput(`members[${i}].lat`, `member ${member.id} has an invalid latitude`, {
+        memberId: member.id,
+      });
+    }
+    if (!validLng(member.lng)) {
+      throw invalidInput(`members[${i}].lng`, `member ${member.id} has an invalid longitude`, {
+        memberId: member.id,
+      });
+    }
+  }
+  for (let i = 0; i < venues.length; i += 1) {
+    const venue = venues[i]!;
+    if (!validLat(venue.lat)) {
+      throw invalidInput(`venues[${i}].lat`, `venue ${venue.id} has an invalid latitude`, {
+        venueId: venue.id,
+      });
+    }
+    if (!validLng(venue.lng)) {
+      throw invalidInput(`venues[${i}].lng`, `venue ${venue.id} has an invalid longitude`, {
+        venueId: venue.id,
+      });
+    }
+  }
+  if (!Number.isInteger(minuteOfDay) || minuteOfDay < 0 || minuteOfDay > 1439) {
+    throw invalidInput('minuteOfDay', `minuteOfDay must be an integer in 0..1439, got ${minuteOfDay}`);
   }
 
   const stats: RecommendResult['stats'] = {
@@ -120,21 +172,28 @@ export function recommend(store: GraphStore, options: RecommendOptions): Recomme
     return finish([]);
   }
 
-  let latSum = 0;
-  let lngSum = 0;
-  for (const member of members) {
-    latSum += member.lat;
-    lngSum += member.lng;
+  let candidateIndexes: number[];
+  if (kCandidates === undefined) {
+    candidateIndexes = open.map((_, i) => i);
+  } else {
+    let latSum = 0;
+    let lngSum = 0;
+    for (const member of members) {
+      latSum += member.lat;
+      lngSum += member.lng;
+    }
+    const venueTree = new KdTree(
+      open.map((v) => v.lat),
+      open.map((v) => v.lng),
+    );
+    candidateIndexes = venueTree
+      .kNearest(latSum / members.length, lngSum / members.length, kCandidates)
+      .map((result) => result.index);
   }
-  const venueTree = new KdTree(
-    open.map((v) => v.lat),
-    open.map((v) => v.lng),
-  );
-  const nearby = venueTree.kNearest(latSum / members.length, lngSum / members.length, kCandidates);
-  stats.considered = nearby.length;
+  stats.considered = candidateIndexes.length;
 
   const candidates: { venue: RecommendVenue; snap: SnapResult }[] = [];
-  for (const { index } of nearby) {
+  for (const index of candidateIndexes) {
     const venue = open[index]!;
     const snap = snapToGraph(store, venue.lat, venue.lng);
     if (snap === null) {
@@ -183,6 +242,18 @@ export function routeFor(
   from: { lat: number; lng: number },
   to: { lat: number; lng: number },
 ): { seconds: number; distanceM: number; path: [number, number][] } | null {
+  if (!validLat(from.lat)) {
+    throw invalidInput('from.lat', `from latitude must be finite and within [-90, 90], got ${from.lat}`);
+  }
+  if (!validLng(from.lng)) {
+    throw invalidInput('from.lng', `from longitude must be finite and within [-180, 180], got ${from.lng}`);
+  }
+  if (!validLat(to.lat)) {
+    throw invalidInput('to.lat', `to latitude must be finite and within [-90, 90], got ${to.lat}`);
+  }
+  if (!validLng(to.lng)) {
+    throw invalidInput('to.lng', `to longitude must be finite and within [-180, 180], got ${to.lng}`);
+  }
   const fromSnap = snapToGraph(store, from.lat, from.lng);
   const toSnap = snapToGraph(store, to.lat, to.lng);
   if (fromSnap === null || toSnap === null) {

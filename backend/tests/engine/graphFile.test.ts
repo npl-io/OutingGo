@@ -125,6 +125,15 @@ describe('serializeGraph / deserializeGraph', () => {
     expectInvalid(buffer);
   });
 
+  it('rejects a 16-byte header claiming huge counts without allocating huge arrays', () => {
+    const buffer = Buffer.alloc(16);
+    buffer.write('OGRF', 0, 'ascii');
+    buffer.writeUInt32LE(1, 4);
+    buffer.writeUInt32LE(4294967295, 8);
+    buffer.writeUInt32LE(4294967295, 12);
+    expectInvalid(buffer);
+  });
+
   it('rejects an extra trailing byte and a missing byte', () => {
     const buffer = serializeGraph(SAMPLE);
     expectInvalid(Buffer.concat([buffer, Buffer.from([0])]));

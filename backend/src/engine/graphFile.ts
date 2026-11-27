@@ -85,6 +85,9 @@ function copyOut<T extends Uint32Array | Float32Array | Float64Array>(
  * @throws EngineError('INVALID_GRAPH_FILE') when the buffer is not a valid graph file.
  */
 export function deserializeGraph(buffer: Buffer): Graph {
+  if (os.endianness() !== 'LE') {
+    throw invalid('only little-endian hosts are supported');
+  }
   if (buffer.length < HEADER_BYTES) throw invalid('file is shorter than the 16-byte header');
   if (buffer.toString('ascii', 0, 4) !== MAGIC) throw invalid('wrong magic bytes');
   const version = buffer.readUInt32LE(4);
